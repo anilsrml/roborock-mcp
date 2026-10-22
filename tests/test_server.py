@@ -1,6 +1,7 @@
 import base64
 import json
 
+import pytest
 from mcp import Client
 
 from roborock.cli import ConnectionCache, RoborockContext
@@ -37,10 +38,19 @@ class FakeMapContent:
         self.image_content = PNG
 
 
+class FakeCommand:
+    def __init__(self):
+        self.sent = []
+
+    async def send(self, command, params=None):
+        self.sent.append(command)
+
+
 class FakeV1:
     def __init__(self):
         self.status = FakeStatus()
         self.map_content = FakeMapContent()
+        self.command = FakeCommand()
 
     async def start(self):
         pass
@@ -154,3 +164,18 @@ async def test_get_map_without_saved_map_is_error():
 
     assert result.is_error
     assert "no saved map" in result.content[0].text
+
+
+@pytest.mark.parametrize(
+    ("tool", "command"),
+    [("start_cleaning", "app_start"), ("pause_cleaning", "app_pause"), ("return_to_dock", "app_charge")],
+)
+async def test_control_tool_sends_command_to_vacuum(tool, command):
+    vacuum = fake_vacuum()
+
+    async with Client(server_with([vacuum])) as client:
+        result = await client.call_tool(tool, {"duid": "abc123"})
+
+    assert not result.is_error
+    assert vacuum.v1_properties.command.sent == [command]
+    assert "Salon" in result.content[0].text

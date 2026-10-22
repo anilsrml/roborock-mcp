@@ -9,6 +9,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
+from roborock import RoborockCommand
 from roborock.cli import ConnectionCache
 from roborock.devices.device_manager import DeviceManager, UserParams, create_device_manager
 from roborock.devices.file_cache import FileCache
@@ -55,7 +56,7 @@ def build_server(create_manager: ManagerFactory) -> MCPServer:
             for d in await manager.get_devices()
         ]
 
-    async def v1_properties(duid: str):
+    async def v1_device(duid: str):
         manager = await get_manager()
         device = await manager.get_device(duid)
         if device is None:
@@ -64,23 +65,45 @@ def build_server(create_manager: ManagerFactory) -> MCPServer:
             # shortcut: only V1-protocol vacuums (S/Q5/Q7 Max…), add Q10/B01 when we meet one
             raise ToolError(f"{device.name} does not use the V1 protocol; it is not supported yet.")
         await device.v1_properties.start()
-        return device.v1_properties
+        return device
 
     @server.tool(annotations=read_only)
     async def get_status(duid: str) -> dict:
         """Get the live status of one device: battery, state, fan speed, errors. Get `duid` from list_devices."""
-        status = (await v1_properties(duid)).status
+        status = (await v1_device(duid)).v1_properties.status
         await status.refresh()
         return status.as_dict()
 
     @server.tool(annotations=read_only)
     async def get_map(duid: str) -> Image:
         """Get the current home map of one vacuum as a PNG image: rooms, walls, dock, robot position. Get `duid` from list_devices."""
-        map_content = (await v1_properties(duid)).map_content
+        map_content = (await v1_device(duid)).v1_properties.map_content
         await map_content.refresh()
         if not map_content.image_content:
             raise ToolError("The vacuum has no saved map yet. Run one full cleaning to create it.")
         return Image(data=map_content.image_content, format="png")
+
+    control = ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+
+    async def send(duid: str, command: RoborockCommand, done: str) -> str:
+        device = await v1_device(duid)
+        await device.v1_properties.command.send(command)
+        return f"{device.name}: {done}"
+
+    @server.tool(annotations=control)
+    async def start_cleaning(duid: str) -> str:
+        """Start a full-home cleaning (or resume a paused one). Get `duid` from list_devices."""
+        return await send(duid, RoborockCommand.APP_START, "cleaning started.")
+
+    @server.tool(annotations=control)
+    async def pause_cleaning(duid: str) -> str:
+        """Pause the current cleaning; the vacuum stays where it is. Get `duid` from list_devices."""
+        return await send(duid, RoborockCommand.APP_PAUSE, "cleaning paused.")
+
+    @server.tool(annotations=control)
+    async def return_to_dock(duid: str) -> str:
+        """Send the vacuum back to its charging dock. Get `duid` from list_devices."""
+        return await send(duid, RoborockCommand.APP_CHARGE, "returning to the dock.")
 
     return server
 
