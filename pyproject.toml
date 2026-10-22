@@ -1,0 +1,29 @@
+[project]
+name = "roborock-mcp"
+version = "0.1.0"
+description = "MCP server for Roborock vacuums"
+readme = "README.md"
+authors = [
+    { name = "Anıl Sürmeli", email = "126188687+anilsrml@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "mcp>=2.3.0",
+    "python-roborock[cli]>=7.13.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[project.scripts]
+roborock-mcp = "roborock_mcp.server:main"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
