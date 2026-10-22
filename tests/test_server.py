@@ -1,4 +1,5 @@
 import base64
+import io
 import json
 
 import pytest
@@ -33,6 +34,7 @@ PNG = b"\x89PNG\r\n\x1a\nfake-map"
 
 class FakeMapContent:
     image_content = None
+    map_data = None
 
     async def refresh(self):
         self.image_content = PNG
@@ -215,3 +217,71 @@ async def test_start_cleaning_unknown_room_is_error_and_sends_nothing():
     assert "Banyo" in result.content[0].text
     assert "Salon, Mutfak" in result.content[0].text
     assert vacuum.v1_properties.command.sent == []
+
+
+def unnamed_rooms_vacuum():
+    """Like the real Q7 Max: the device has no room names, the map has segments 16 and 17."""
+    from types import SimpleNamespace
+
+    vacuum = fake_vacuum()
+
+    class EmptyRooms:
+        rooms = []
+
+        async def refresh(self):
+            pass
+
+    vacuum.v1_properties.rooms = EmptyRooms()
+    vacuum.v1_properties.map_content.map_data = SimpleNamespace(rooms={17: object(), 16: object()})
+    return vacuum
+
+
+async def test_start_cleaning_unnamed_rooms_use_room_number_names():
+    vacuum = unnamed_rooms_vacuum()
+
+    async with Client(server_with([vacuum])) as client:
+        result = await client.call_tool("start_cleaning", {"duid": "abc123", "rooms": ["room 16"]})
+
+    assert not result.is_error
+    assert vacuum.v1_properties.command.params == [[{"segments": [16]}]]
+    assert "Room 16" in result.content[0].text
+
+
+async def test_start_cleaning_unnamed_unknown_room_lists_room_numbers():
+    vacuum = unnamed_rooms_vacuum()
+
+    async with Client(server_with([vacuum])) as client:
+        result = await client.call_tool("start_cleaning", {"duid": "abc123", "rooms": ["Salon"]})
+
+    assert result.is_error
+    assert "Room 16, Room 17" in result.content[0].text
+    assert vacuum.v1_properties.command.sent == []
+
+
+async def test_get_map_draws_room_names_on_the_image():
+    from types import SimpleNamespace
+
+    from PIL import Image as PILImage
+    from vacuum_map_parser_base.map_data import ImageDimensions, Room
+
+    blank = io.BytesIO()
+    PILImage.new("RGB", (100, 100), "blue").save(blank, "PNG")
+    vacuum = unnamed_rooms_vacuum()
+    map_content = vacuum.v1_properties.map_content
+    map_content.map_data = SimpleNamespace(
+        rooms={16: Room(0, 0, 100, 100, 16)},
+        image=SimpleNamespace(dimensions=ImageDimensions(0, 0, 100, 100, 1, 0, lambda p: p)),
+    )
+
+    async def refresh():
+        map_content.image_content = blank.getvalue()
+
+    map_content.refresh = refresh
+
+    async with Client(server_with([vacuum])) as client:
+        result = await client.call_tool("get_map", {"duid": "abc123"})
+
+    assert not result.is_error
+    labelled = PILImage.open(io.BytesIO(base64.b64decode(result.content[0].data)))
+    assert labelled.size == (100, 100)
+    assert len(labelled.getcolors(maxcolors=100 * 100)) > 1

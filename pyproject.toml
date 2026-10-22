@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "mcp>=2.3.0",
+    "pillow>=13.0.0",
     "python-roborock[cli]>=7.13.0",
 ]
 
