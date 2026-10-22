@@ -91,9 +91,26 @@ def build_server(create_manager: ManagerFactory) -> MCPServer:
         return f"{device.name}: {done}"
 
     @server.tool(annotations=control)
-    async def start_cleaning(duid: str) -> str:
-        """Start a full-home cleaning (or resume a paused one). Get `duid` from list_devices."""
-        return await send(duid, RoborockCommand.APP_START, "cleaning started.")
+    async def start_cleaning(duid: str, rooms: list[str] | None = None) -> str:
+        """Start cleaning. Without `rooms`: the whole home (or resume a paused cleaning).
+        With `rooms`: only those rooms, by the names used in the Roborock app. Get `duid` from list_devices."""
+        if not rooms:
+            return await send(duid, RoborockCommand.APP_START, "cleaning started.")
+        device = await v1_device(duid)
+        room_trait = device.v1_properties.rooms
+        await room_trait.refresh()
+        known = room_trait.rooms or []
+        by_name = {room.name.casefold(): room for room in known}
+        unknown = [name for name in rooms if name.casefold() not in by_name]
+        if unknown:
+            raise ToolError(
+                f"Unknown room(s): {', '.join(unknown)}. Rooms on this map: {', '.join(r.name for r in known)}."
+            )
+        chosen = [by_name[name.casefold()] for name in rooms]
+        await device.v1_properties.command.send(
+            RoborockCommand.APP_SEGMENT_CLEAN, [{"segments": [room.segment_id for room in chosen]}]
+        )
+        return f"{device.name}: cleaning started in {', '.join(room.name for room in chosen)}."
 
     @server.tool(annotations=control)
     async def pause_cleaning(duid: str) -> str:

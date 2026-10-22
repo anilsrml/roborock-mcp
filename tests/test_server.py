@@ -41,9 +41,20 @@ class FakeMapContent:
 class FakeCommand:
     def __init__(self):
         self.sent = []
+        self.params = []
 
     async def send(self, command, params=None):
         self.sent.append(command)
+        self.params.append(params)
+
+
+class FakeRooms:
+    rooms = None
+
+    async def refresh(self):
+        from types import SimpleNamespace
+
+        self.rooms = [SimpleNamespace(segment_id=16, name="Salon"), SimpleNamespace(segment_id=17, name="Mutfak")]
 
 
 class FakeV1:
@@ -51,6 +62,7 @@ class FakeV1:
         self.status = FakeStatus()
         self.map_content = FakeMapContent()
         self.command = FakeCommand()
+        self.rooms = FakeRooms()
 
     async def start(self):
         pass
@@ -179,3 +191,27 @@ async def test_control_tool_sends_command_to_vacuum(tool, command):
     assert not result.is_error
     assert vacuum.v1_properties.command.sent == [command]
     assert "Salon" in result.content[0].text
+
+
+async def test_start_cleaning_with_rooms_cleans_only_those_rooms():
+    vacuum = fake_vacuum()
+
+    async with Client(server_with([vacuum])) as client:
+        result = await client.call_tool("start_cleaning", {"duid": "abc123", "rooms": ["salon", "Mutfak"]})
+
+    assert not result.is_error
+    assert vacuum.v1_properties.command.sent == ["app_segment_clean"]
+    assert vacuum.v1_properties.command.params == [[{"segments": [16, 17]}]]
+    assert "Salon, Mutfak" in result.content[0].text
+
+
+async def test_start_cleaning_unknown_room_is_error_and_sends_nothing():
+    vacuum = fake_vacuum()
+
+    async with Client(server_with([vacuum])) as client:
+        result = await client.call_tool("start_cleaning", {"duid": "abc123", "rooms": ["Banyo"]})
+
+    assert result.is_error
+    assert "Banyo" in result.content[0].text
+    assert "Salon, Mutfak" in result.content[0].text
+    assert vacuum.v1_properties.command.sent == []
