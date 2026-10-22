@@ -2,7 +2,10 @@ import json
 
 from mcp import Client
 
-from roborock_mcp.server import build_server, manager_from_credentials
+from roborock.cli import ConnectionCache, RoborockContext
+from roborock.data import Reference, RRiot, UserData
+
+from roborock_mcp.server import build_server, load_user_params, manager_from_credentials
 
 
 async def test_list_devices_without_login_tells_user_to_login(tmp_path):
@@ -101,3 +104,15 @@ async def test_manager_is_created_once_and_reused():
         await client.call_tool("get_status", {"duid": "abc123"})
 
     assert len(calls) == 1
+
+
+def test_load_user_params_reads_file_written_by_roborock_login(tmp_path, monkeypatch):
+    path = tmp_path / ".roborock"
+    monkeypatch.setattr(RoborockContext, "roborock_file", path)
+    user_data = UserData(rriot=RRiot(u="u", s="s", h="h", k="k", r=Reference(a="https://api")), rruid="r1")
+    RoborockContext().update(ConnectionCache(user_data=user_data, email="me@example.com"))
+
+    params = load_user_params(path)
+
+    assert params.username == "me@example.com"
+    assert params.user_data == user_data

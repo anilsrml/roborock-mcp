@@ -8,7 +8,7 @@ from pathlib import Path
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
-from roborock.data import UserData
+from roborock.cli import ConnectionCache
 from roborock.devices.device_manager import DeviceManager, UserParams, create_device_manager
 from roborock.devices.file_cache import FileCache
 
@@ -20,12 +20,15 @@ CACHE_FILE = Path("~/.roborock-mcp.cache").expanduser()
 ManagerFactory = Callable[[], Awaitable[DeviceManager]]
 
 
+def load_user_params(path: Path) -> UserParams:
+    login = ConnectionCache.from_dict(json.loads(path.read_text()))
+    return UserParams(username=login.email, user_data=login.user_data)
+
+
 async def manager_from_credentials(path: Path = CREDENTIALS_FILE) -> DeviceManager:
     if not path.is_file():
         raise ToolError(f"No Roborock login found at {path}. Run `uv run roborock login --email <your email>` first.")
-    data = json.loads(path.read_text())
-    params = UserParams(username=data["email"], user_data=UserData.from_dict(data["user_data"]))
-    return await create_device_manager(params, cache=FileCache(CACHE_FILE))
+    return await create_device_manager(load_user_params(path), cache=FileCache(CACHE_FILE))
 
 
 def build_server(create_manager: ManagerFactory) -> MCPServer:
