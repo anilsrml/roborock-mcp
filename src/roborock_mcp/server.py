@@ -7,6 +7,7 @@ from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.server.mcpserver.utilities.types import Image
 from mcp.types import ToolAnnotations
 from roborock.cli import ConnectionCache
 from roborock.devices.device_manager import DeviceManager, UserParams, create_device_manager
@@ -54,19 +55,32 @@ def build_server(create_manager: ManagerFactory) -> MCPServer:
             for d in await manager.get_devices()
         ]
 
-    @server.tool(annotations=read_only)
-    async def get_status(duid: str) -> dict:
-        """Get the live status of one device: battery, state, fan speed, errors. Get `duid` from list_devices."""
+    async def v1_properties(duid: str):
         manager = await get_manager()
         device = await manager.get_device(duid)
         if device is None:
             raise ToolError(f"No device with id {duid}. Call list_devices to see valid ids.")
         if device.v1_properties is None:
             # shortcut: only V1-protocol vacuums (S/Q5/Q7 Max…), add Q10/B01 when we meet one
-            raise ToolError(f"{device.name} does not use the V1 protocol; status is not supported yet.")
+            raise ToolError(f"{device.name} does not use the V1 protocol; it is not supported yet.")
         await device.v1_properties.start()
-        await device.v1_properties.status.refresh()
-        return device.v1_properties.status.as_dict()
+        return device.v1_properties
+
+    @server.tool(annotations=read_only)
+    async def get_status(duid: str) -> dict:
+        """Get the live status of one device: battery, state, fan speed, errors. Get `duid` from list_devices."""
+        status = (await v1_properties(duid)).status
+        await status.refresh()
+        return status.as_dict()
+
+    @server.tool(annotations=read_only)
+    async def get_map(duid: str) -> Image:
+        """Get the current home map of one vacuum as a PNG image: rooms, walls, dock, robot position. Get `duid` from list_devices."""
+        map_content = (await v1_properties(duid)).map_content
+        await map_content.refresh()
+        if not map_content.image_content:
+            raise ToolError("The vacuum has no saved map yet. Run one full cleaning to create it.")
+        return Image(data=map_content.image_content, format="png")
 
     return server
 

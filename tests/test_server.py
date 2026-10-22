@@ -1,3 +1,4 @@
+import base64
 import json
 
 from mcp import Client
@@ -26,9 +27,20 @@ class FakeStatus:
         return {"battery": self.battery, "state": "charging"}
 
 
+PNG = b"\x89PNG\r\n\x1a\nfake-map"
+
+
+class FakeMapContent:
+    image_content = None
+
+    async def refresh(self):
+        self.image_content = PNG
+
+
 class FakeV1:
     def __init__(self):
         self.status = FakeStatus()
+        self.map_content = FakeMapContent()
 
     async def start(self):
         pass
@@ -116,3 +128,29 @@ def test_load_user_params_reads_file_written_by_roborock_login(tmp_path, monkeyp
 
     assert params.username == "me@example.com"
     assert params.user_data == user_data
+
+
+async def test_get_map_returns_png_image():
+    async with Client(server_with([fake_vacuum()])) as client:
+        result = await client.call_tool("get_map", {"duid": "abc123"})
+
+    assert not result.is_error
+    image = result.content[0]
+    assert image.type == "image"
+    assert image.mime_type == "image/png"
+    assert base64.b64decode(image.data) == PNG
+
+
+async def test_get_map_without_saved_map_is_error():
+    vacuum = fake_vacuum()
+
+    async def no_map():
+        pass
+
+    vacuum.v1_properties.map_content.refresh = no_map
+
+    async with Client(server_with([vacuum])) as client:
+        result = await client.call_tool("get_map", {"duid": "abc123"})
+
+    assert result.is_error
+    assert "no saved map" in result.content[0].text

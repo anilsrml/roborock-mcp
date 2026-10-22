@@ -8,6 +8,7 @@ MCP server for Roborock vacuums, built on [python-roborock](https://github.com/p
 |---|---|
 | `list_devices` | Devices on your account: name, `duid`, model, online |
 | `get_status` | Live status of one device (battery, state, fan speed, errors) |
+| `get_map` | Current home map as a PNG image (rooms, walls, dock, robot, last path) |
 
 ## Setup
 
