@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.anilsrml/roborock-mcp",
+  "title": "Roborock",
+  "description": "Control Roborock vacuums: status, labelled home map, clean chosen rooms, pause, dock.",
+  "repository": {
+    "url": "https://github.com/anilsrml/roborock-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "roborock-mcp-server",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

@@ -1490,7 +1490,7 @@ wheels = [
 ]
 
 [[package]]
-name = "roborock-mcp"
+name = "roborock-mcp-server"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

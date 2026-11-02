@@ -1,8 +1,11 @@
 [project]
-name = "roborock-mcp"
+name = "roborock-mcp-server"
 version = "0.1.0"
-description = "MCP server for Roborock vacuums"
+description = "MCP server for Roborock vacuums: status, labelled home map, room cleaning"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["mcp", "model-context-protocol", "roborock", "robot-vacuum", "smart-home"]
 authors = [
     { name = "Anıl Sürmeli", email = "126188687+anilsrml@users.noreply.github.com" }
 ]
@@ -13,9 +16,16 @@ dependencies = [
     "python-roborock[cli]>=7.13.0",
 ]
 
+[project.urls]
+Repository = "https://github.com/anilsrml/roborock-mcp"
+
 [build-system]
 requires = ["uv_build>=0.13.5,<0.14.0"]
 build-backend = "uv_build"
+
+# PyPI name "roborock-mcp" is taken; the import package keeps its name.
+[tool.uv.build-backend]
+module-name = "roborock_mcp"
 
 [dependency-groups]
 dev = [
