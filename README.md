@@ -54,6 +54,33 @@ Needs [uv](https://docs.astral.sh/uv/) and git. uv downloads Python 3.12+ if you
    }
    ```
 
+3. Restart your MCP client and ask in plain language:
+
+   - "Is my vacuum charging? How much battery does it have?"
+   - "Show me the map of my home."
+   - "Clean only the kitchen and the living room."
+   - "Pause the vacuum." / "Send it back to the dock."
+
+## How it works
+
+```mermaid
+flowchart LR
+    A[AI assistant] -- MCP stdio --> S[roborock-mcp]
+    S -- reads --> L["~/.roborock<br/>(login token)"]
+    S -- python-roborock --> C[Roborock cloud]
+    S -- "python-roborock<br/>(local network or MQTT)" --> V[Your vacuum]
+```
+
+1. `roborock login` (from python-roborock) logs in with the email code and saves your token to `~/.roborock`.
+   There is no password; the server only reads this token.
+2. On the first tool call the server reads that file and asks the Roborock cloud for your home: devices, rooms, local keys.
+   It saves this to `~/.roborock-mcp.cache`, because the cloud allows only 5 of these requests per hour.
+3. Each tool call goes to the vacuum through python-roborock, which picks the connection itself:
+   your local network when it can reach the vacuum, otherwise Roborock's MQTT cloud.
+4. Rooms:
+   - `get_map` draws the map as a PNG and writes each room's name on it, so you can see which names to use.
+   - `start_cleaning` with `rooms` turns those names into the vacuum's room ids and starts a room cleaning.
+
 ## Development
 
 ```bash
